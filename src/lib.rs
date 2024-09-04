@@ -1,10 +1,11 @@
 use std::fs;
 use std::error::Error;
-
+use std::env;
 
 pub struct Arguments {
     search_query: String,
-    file_path: String
+    file_path: String,
+    ignore_case: bool
 }
 
 impl Arguments {
@@ -16,7 +17,8 @@ impl Arguments {
 //      TODO: Update for efficiency
         let search_query = args[1].clone();
         let file_path = args[2].clone();
-        Ok(Arguments { search_query, file_path })
+        let ignore_case = env::var("IGNORE_CASE").is_ok();
+        Ok(Arguments { search_query, file_path, ignore_case })
     }
 }
 
@@ -24,7 +26,13 @@ pub fn run(cli_args: Arguments) -> Result<(), Box<dyn Error>> {
 
     let contents = fs::read_to_string(cli_args.file_path)?;
 
-    for (i, line) in search(&cli_args.search_query, &contents) {
+    let results = if cli_args.ignore_case {
+        search_case_insensitive(&cli_args.search_query, &contents)
+    } else {
+        search(&cli_args.search_query, &contents)
+    };
+
+    for (i, line) in results {
         println!("LINE: {} {}", i, line);
     }
     Ok(())
@@ -40,6 +48,17 @@ fn search<'a>(query: &str, contents: &'a str) -> Vec<(usize , &'a str)> {
     result
 }
 
+
+fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<(usize , &'a str)> {
+    let mut result: Vec<(usize, &str)> = Vec::new();
+    for (i, line) in contents.lines().enumerate() {
+        if line.to_lowercase().contains(&query.to_lowercase()) {
+            result.push((i+1, line));
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -47,6 +66,17 @@ mod tests {
     #[test]
     fn search_test() {
         let query = "effi";
+        let contents = "\
+Rust:
+reliable, efficient, fearless.
+Choose all three.";
+
+        assert_eq!(vec![(2, "reliable, efficient, fearless.")], search(query, contents));
+    }
+
+    #[test]
+    fn test_search_case_insenitive() {
+        let query = "FEar";
         let contents = "\
 Rust:
 reliable, efficient, fearless.
